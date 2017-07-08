@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" type="text/css" href="css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="knockout-3.4.2.js"></script>
+  <script src="jquery.min.js"></script>
+
+  <script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBH2PxSNtHPZgDrXmEiKI4ykigyqHHAmPg&v=3&callback=initializeMap" onerror="googleError()">
+  </script>
+
+</head>
+<body>
+  <button class="button" onclick="sidebar_open()">☰</button>
+  <div class="sidebar border-right" style="display:none" id="mySidebar">
+  <button onclick="sidebar_close()" class="large">Close &times;</button>
+    <div class="options-box">
+      <select data-bind="options:listofplaces , optionsText:'title', value:selectedPlace, event: {change: selecctionchangeevent} , optionsCaption: 'Choose..'"></select>
+      <h1>Places</h1>
+      <!--ko ifnot: selectedPlace-->
+      <ul class="sidebar-nav" id="side_bar" data-bind="foreach: listofplaces">
+        <li tabindex="1" data-bind="text: title, click: $parent.itemClicked.bind($data, $index())">
+        </li>
+      </ul>
+      <!--/ko -->
+
+      <!--ko if: selectedPlace-->
+      <span data-bind= "text: selectedPlace().title"></span>
+      <!--/ko -->
+
+    </div>
+  </div>
+
+      <div id="map">
+      </div>
+
+
+
+
+<script>
+var map;
+var listofmarkers = [];
+var places = [
+  {title: 'Hayward Bart', location: {lat: 37.6697, lng: -122.0870 }},
+  {title: 'Fremont Bart', location: {lat: 37.5575, lng: -121.9766}},
+  {title: 'Montgomery Bart', location: {lat: 37.7894, lng: -122.4011}},
+  {title: 'Daly City', location: {lat: 37.687923, lng: 	-122.470207}},
+  {title: 'North Berekely', location: {lat: 37.871853, lng: -122.258423}},
+];
+
+function initializeMap() {
+  var latlng = new google.maps.LatLng(39.305, -76.617);
+  map = new google.maps.Map(document.getElementById('map'), {
+    center:latlng,
+    zoom: 30
+  });
+
+
+
+  var bounds = new google.maps.LatLngBounds();
+
+  for (var i = 0; i < places.length; i++) {
+    var position = places[i].location;
+    var title = places[i].title;
+    var marker = new google.maps.Marker({
+      map: map,
+      position: position,
+      title: title,
+      id: i
+    });
+
+    listofmarkers.push(marker);
+
+    places[i].marker = marker;
+    var infowindow = new google.maps.InfoWindow();
+    marker.addListener('click', function(){
+      openInfowindow(this, infowindow);
+    });
+    bounds.extend(listofmarkers[i].position);
+  }
+  map.fitBounds(bounds);
+
+  var viewmodel = function(){
+
+    this.listofplaces = ko.observableArray(places);
+    this.selectedPlace = ko.observable();
+    this.selecctionchangeevent = function()
+    {
+      var select = this.selectedPlace();
+
+      console.log(this.selectedPlace());
+
+      if(select){
+      clear();
+      select.marker.setVisible(true);
+      openInfowindow(select.marker, infowindow);
+    }
+    else{
+      for (var i = 0; i < places.length; i++) {
+        places[i].marker.setVisible(false);
+      }
+    }
+
+/*
+      var geocoder = new google.maps.Geocoder();
+
+
+      clear();
+      geocoder.geocode({'address': select.title}, function(results, status) {
+        if (status === 'OK') {
+          map.setCenter(results[0].geometry.location);
+          var marker = new google.maps.Marker({
+            map: map,
+            position: results[0].geometry.location,
+            title: select.title
+          });
+          openInfowindow(marker, infowindow);
+          marker.addListener('click',function(){
+            map.setCenter(marker.getPosition());
+            marker.setAnimation(google.maps.Animation.BOUNCE);
+            openInfowindow(marker,infowindow);
+          })
+
+        } else {
+          alert('Geocode was not successful for the following reason: ' + status);
+        }
+      })
+      */
+
+    }
+
+this.itemClicked = function(index) {
+  var selectedmarker = places[index].marker;
+  openInfowindow(selectedmarker,infowindow);
+}
+}
+
+ko.applyBindings(new viewmodel());
+}
+
+function clear(){
+  for (var i = 0; i < places.length; i++) {
+    places[i].marker.setVisible(false);
+  }
+  listofmarkers = [];
+}
+
+function openInfowindow(marker, infowindow)
+{
+  if(infowindow.marker != marker)
+  {
+    var streetviewUrl = 'http://maps.googleapis.com/maps/api/streetview?size=200x200&location='+marker.title+'';
+    var wikiUrl = 'http://en.wikipedia.org/w/api.php?action=opensearch&search=' + marker.title +'&format=json&callback=wikiCallback';
+    var content ='<div>'+ marker.title +'</div><img src="'+ streetviewUrl +'"><div id= "wikiElem"></div>';
+    infowindow.marker = marker;
+    infowindow.setContent(content);
+    infowindow.open(map, marker);
+    marker.addListener('click',function(){
+      map.setCenter(marker.getPosition());
+      marker.setAnimation(google.maps.Animation.BOUNCE);
+      openInfowindow(marker,infowindow);
+    })
+
+    $.ajax({
+      url: wikiUrl,
+      dataType: "jsonp",
+      success: function(response){
+        var articlelist = response[1];
+        $wikiElem = $("#wikiElem");
+
+        for(var i = 0; i<articlelist.length; i++)
+        {
+          articlestr = articlelist[i];
+          var url = 'http://en.wikipedia.org/wiki/' + articlestr ;
+          $wikiElem.append('<li><a href="'+ url+'">'+
+          articlestr + '<a></li>');
+        }
+
+      }
+    });
+
+  }
+}
+
+function sidebar_open() {
+    document.getElementById("mySidebar").style.display = "block";
+}
+function sidebar_close() {
+    document.getElementById("mySidebar").style.display = "none";
+}
+</script>
+
+
+</body>
+</html>
